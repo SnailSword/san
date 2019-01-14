@@ -1,12 +1,14 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 元素节点类
- * @author errorrik(errorrik@gmail.com)
  */
 
 
-var each = require('../util/each');
 var guid = require('../util/guid');
-var unionKeys = require('../util/union-keys');
 var removeEl = require('../browser/remove-el');
 var changeExprCompare = require('../runtime/change-expr-compare');
 var changesIsInDataRef = require('../runtime/changes-is-in-data-ref');
@@ -15,6 +17,7 @@ var LifeCycle = require('./life-cycle');
 var NodeType = require('./node-type');
 var reverseElementChildren = require('./reverse-element-children');
 var isDataChangeByElement = require('./is-data-change-by-element');
+var getPropHandler = require('./get-prop-handler');
 var elementUpdateChildren = require('./element-update-children');
 var elementOwnCreate = require('./element-own-create');
 var elementOwnAttach = require('./element-own-attach');
@@ -176,12 +179,12 @@ Element.prototype._update = function (changes) {
                 // #[end]
 
                 this.el.innerHTML = evalExpr(htmlDirective.value, this.scope, this.owner);
-                return false;
+                break;
             }
         }
     }
     else {
-        elementUpdateChildren(this, changes);
+        elementUpdateChildren(this.children, changes);
     }
 };
 

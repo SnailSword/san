@@ -1,6 +1,10 @@
 /**
- * @file 组件预热
- * @author errorrik(errorrik@gmail.com)
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
+ * @file ANode预热
  */
 
 var ExprType = require('../parser/expr-type');
@@ -11,11 +15,11 @@ var getANodeProp = require('./get-a-node-prop');
 var isBrowser = require('../browser/is-browser');
 
 /**
- * 组件预热，分析组件aNode的数据引用等信息
+ * ANode预热，分析的数据引用等信息
  *
- * @param {Function} ComponentClass 组件类
+ * @param {Object} aNode 要预热的ANode
  */
-function componentPreheat(ComponentClass) {
+function preheatANode(aNode) {
     var stack = [];
 
     function recordHotspotData(refs, notContentData) {
@@ -36,12 +40,14 @@ function componentPreheat(ComponentClass) {
 
 
             if (aNode.textExpr) {
-                aNode.hotspot = {data: {}};
+                aNode.hotspot = { data: {} };
                 recordHotspotData(analyseExprDataHotspot(aNode.textExpr));
             }
             else {
                 var sourceNode;
-                if (isBrowser && aNode.tagName && !/^(template|slot|select|input|option)$/i.test(aNode.tagName)) {
+                if (isBrowser && aNode.tagName
+                    && !/^(template|slot|select|input|option|button)$/i.test(aNode.tagName)
+                ) {
                     sourceNode = createEl(aNode.tagName);
                 }
 
@@ -63,26 +69,29 @@ function componentPreheat(ComponentClass) {
                     recordHotspotData(analyseExprDataHotspot(prop.expr));
                 });
 
-                /* eslint-disable guard-for-in */
                 for (var key in aNode.directives) {
-                    var directive = aNode.directives[key];
-                    recordHotspotData(analyseExprDataHotspot(directive.value), !/^(html|bind)$/.test(key));
+                    if (aNode.directives.hasOwnProperty(key)) {
+                        var directive = aNode.directives[key];
+                        recordHotspotData(
+                            analyseExprDataHotspot(directive.value),
+                            !/^(html|bind)$/.test(key)
+                        );
 
-                    // init trackBy getKey function
-                    if (key === 'for') {
-                        var trackBy = directive.trackBy;
-                        if (trackBy
-                            && trackBy.type === ExprType.ACCESSOR
-                            && trackBy.paths[0].value === directive.item.raw
-                        ) {
-                            aNode.hotspot.getForKey = new Function(
-                                directive.item.raw,
-                                'return ' + trackBy.raw
-                            );
+                        // init trackBy getKey function
+                        if (key === 'for') {
+                            var trackBy = directive.trackBy;
+                            if (trackBy
+                                && trackBy.type === ExprType.ACCESSOR
+                                && trackBy.paths[0].value === directive.item.raw
+                            ) {
+                                aNode.hotspot.getForKey = new Function(
+                                    directive.item.raw,
+                                    'return ' + trackBy.raw
+                                );
+                            }
                         }
                     }
                 }
-                /* eslint-enable guard-for-in */
 
                 each(aNode.elses, function (child) {
                     analyseANodeHotspot(child);
@@ -138,7 +147,9 @@ function componentPreheat(ComponentClass) {
         }
     }
 
-    analyseANodeHotspot(ComponentClass.prototype.aNode);
+    if (aNode && !aNode.hotspot) {
+        analyseANodeHotspot(aNode);
+    }
 }
 
 /**
@@ -192,4 +203,4 @@ function analyseExprDataHotspot(expr) {
     return refs;
 }
 
-exports = module.exports = componentPreheat;
+exports = module.exports = preheatANode;

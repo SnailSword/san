@@ -1,11 +1,16 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 将组件编译成 render 方法的 js 源码
- * @author errorrik(errorrik@gmail.com)
  */
 
 
 var each = require('../util/each');
 var guid = require('../util/guid');
+var splitStr2Obj = require('../util/split-str-2-obj');
 var parseExpr = require('../parser/parse-expr');
 var createANode = require('../parser/create-a-node');
 var cloneDirectives = require('../parser/clone-directives');
@@ -14,6 +19,7 @@ var CompileSourceBuffer = require('./compile-source-buffer');
 var compileExprSource = require('./compile-expr-source');
 var rinseCondANode = require('./rinse-cond-anode');
 var getANodeProp = require('./get-a-node-prop');
+var ComponentLoader = require('./component-loader');
 
 // #[begin] ssr
 
@@ -52,11 +58,10 @@ var elementSourceCompiler = {
      * @param {CompileSourceBuffer} sourceBuffer 编译源码的中间buffer
      * @param {string} tagName 标签名
      * @param {Array} props 属性列表
-     * @param {string?} extraProp 额外的属性串
+     * @param {Object=} bindDirective bind指令对象
      */
-    tagStart: function (sourceBuffer, tagName, props, extraProp, bindDirective) {
+    tagStart: function (sourceBuffer, tagName, props, bindDirective) {
         sourceBuffer.joinString('<' + tagName);
-        sourceBuffer.joinString(extraProp || '');
 
         // index list
         var propsIndex = {};
@@ -293,9 +298,14 @@ var aNodeCompiler = {
             var ComponentType = owner.getComponentType
                 ? owner.getComponentType(aNode)
                 : owner.components[aNode.tagName];
+
             if (ComponentType) {
                 compileMethod = 'compileComponent';
                 extra.ComponentClass = ComponentType;
+
+                if (ComponentType instanceof ComponentLoader) {
+                    compileMethod = 'compileComponentLoader';
+                }
             }
         }
 
@@ -464,7 +474,7 @@ var aNodeCompiler = {
         sourceBuffer.addRaw('  return html;');
         sourceBuffer.addRaw('}');
 
-        sourceBuffer.addRaw('  var $givenSlot = [];');
+        sourceBuffer.addRaw('  var $mySourceSlots = [];');
 
         var nameProp = getANodeProp(aNode, 'name');
         if (nameProp) {
@@ -474,16 +484,16 @@ var aNodeCompiler = {
             sourceBuffer.addRaw('var $slotName = null;');
         }
 
-        sourceBuffer.addRaw('var $ctxGivenSlots = componentCtx.givenSlots;');
-        sourceBuffer.addRaw('for (var $i = 0; $i < $ctxGivenSlots.length; $i++) {');
-        sourceBuffer.addRaw('  if ($ctxGivenSlots[$i][1] == $slotName) {');
-        sourceBuffer.addRaw('    $givenSlot.push($ctxGivenSlots[$i][0]);');
+        sourceBuffer.addRaw('var $ctxSourceSlots = componentCtx.sourceSlots;');
+        sourceBuffer.addRaw('for (var $i = 0; $i < $ctxSourceSlots.length; $i++) {');
+        sourceBuffer.addRaw('  if ($ctxSourceSlots[$i][1] == $slotName) {');
+        sourceBuffer.addRaw('    $mySourceSlots.push($ctxSourceSlots[$i][0]);');
         sourceBuffer.addRaw('  }');
         sourceBuffer.addRaw('}');
 
 
-        sourceBuffer.addRaw('var $isInserted = $givenSlot.length > 0;');
-        sourceBuffer.addRaw('if (!$isInserted) { $givenSlot.push($defaultSlotRender); }');
+        sourceBuffer.addRaw('var $isInserted = $mySourceSlots.length > 0;');
+        sourceBuffer.addRaw('if (!$isInserted) { $mySourceSlots.push($defaultSlotRender); }');
 
         sourceBuffer.addRaw('var $slotCtx = $isInserted ? componentCtx.owner : componentCtx;');
 
@@ -503,8 +513,8 @@ var aNodeCompiler = {
             });
         }
 
-        sourceBuffer.addRaw('for (var $renderIndex = 0; $renderIndex < $givenSlot.length; $renderIndex++) {');
-        sourceBuffer.addRaw('  html += $givenSlot[$renderIndex]($slotCtx);');
+        sourceBuffer.addRaw('for (var $renderIndex = 0; $renderIndex < $mySourceSlots.length; $renderIndex++) {');
+        sourceBuffer.addRaw('  html += $mySourceSlots[$renderIndex]($slotCtx);');
         sourceBuffer.addRaw('}');
 
         sourceBuffer.addRaw('})();');
@@ -534,7 +544,6 @@ var aNodeCompiler = {
             sourceBuffer,
             aNode.tagName,
             aNode.props,
-            extra.prop,
             aNode.directives.bind
         );
 
@@ -552,64 +561,82 @@ var aNodeCompiler = {
      * @param {Function} extra.ComponentClass 对应组件类
      */
     compileComponent: function (aNode, sourceBuffer, owner, extra) {
+        var dataLiteral = '{}';
+
         if (aNode) {
             sourceBuffer.addRaw('var $slotName = null;');
-            sourceBuffer.addRaw('var $givenSlots = [];');
+            sourceBuffer.addRaw('var $sourceSlots = [];');
             each(aNode.children, function (child) {
                 var slotBind = !child.textExpr && getANodeProp(child, 'slot');
                 if (slotBind) {
                     sourceBuffer.addRaw('$slotName = ' + compileExprSource.expr(slotBind.expr) + ';');
-                    sourceBuffer.addRaw('$givenSlots.push([function (componentCtx) {');
+                    sourceBuffer.addRaw('$sourceSlots.push([function (componentCtx) {');
                     sourceBuffer.addRaw('  var html = "";');
                     sourceBuffer.addRaw(aNodeCompiler.compile(child, sourceBuffer, owner));
                     sourceBuffer.addRaw('  return html;');
                     sourceBuffer.addRaw('}, $slotName]);');
                 }
                 else {
-                    sourceBuffer.addRaw('$givenSlots.push([function (componentCtx) {');
+                    sourceBuffer.addRaw('$sourceSlots.push([function (componentCtx) {');
                     sourceBuffer.addRaw('  var html = "";');
                     sourceBuffer.addRaw(aNodeCompiler.compile(child, sourceBuffer, owner));
                     sourceBuffer.addRaw('  return html;');
                     sourceBuffer.addRaw('}]);');
                 }
             });
+
+            var givenData = [];
+            each(camelComponentBinds(aNode.props), function (prop) {
+                postProp(prop);
+                givenData.push(
+                    compileExprSource.stringLiteralize(prop.name)
+                    + ':'
+                    + compileExprSource.expr(prop.expr)
+                );
+            });
+
+            dataLiteral = '{' + givenData.join(',\n') + '}';
+            if (aNode.directives.bind) {
+                dataLiteral = 'extend('
+                    + compileExprSource.expr(aNode.directives.bind.value)
+                    + ', '
+                    + dataLiteral
+                    + ')';
+            }
         }
 
         var ComponentClass = extra.ComponentClass;
+
         var component = new ComponentClass({
-            aNode: aNode,
+            source: aNode,
             owner: owner,
             subTag: aNode.tagName
         });
 
-        var givenData = [];
-
-        each(component.binds, function (prop) {
-            givenData.push(
-                compileExprSource.stringLiteralize(prop.name)
-                + ':'
-                + compileExprSource.expr(prop.expr)
-            );
-        });
-
-        var givenDataHTML = '{' + givenData.join(',\n') + '}';
-        if (aNode.directives.bind){
-            givenDataHTML = 'extend('
-                + compileExprSource.expr(aNode.directives.bind.value)
-                 + ', '
-                + givenDataHTML
-                + ')';
-        }
-
         sourceBuffer.addRaw('html += (');
-        sourceBuffer.addRendererStart();
-        compileComponentSource(sourceBuffer, component, extra && extra.prop);
-        sourceBuffer.addRendererEnd();
-        sourceBuffer.addRaw(')(' + givenDataHTML + ', componentCtx, $givenSlots);');
-        sourceBuffer.addRaw('$givenSlots = null;');
+        compileComponentSource(sourceBuffer, component);
+        sourceBuffer.addRaw(')(' + dataLiteral + ', componentCtx, $sourceSlots);');
+        sourceBuffer.addRaw('$sourceSlots = null;');
+    },
+
+    /**
+     * 编译组件加载器节点
+     *
+     * @param {ANode} aNode 节点对象
+     * @param {CompileSourceBuffer} sourceBuffer 编译源码的中间buffer
+     * @param {Component} owner 所属组件实例环境
+     * @param {Object} extra 编译所需的一些额外信息
+     * @param {Function} extra.ComponentClass 对应类
+     */
+    compileComponentLoader: function (aNode, sourceBuffer, owner, extra) {
+        var LoadingComponent = extra.ComponentClass.placeholder;
+        if (typeof LoadingComponent === 'function') {
+            aNodeCompiler.compileComponent(aNode, sourceBuffer, owner, {
+                ComponentClass: LoadingComponent
+            });
+        }
     }
 };
-/* eslint-disable guard-for-in */
 
 /**
  * 生成组件 renderer 时 ctx 对象构建的代码
@@ -617,49 +644,48 @@ var aNodeCompiler = {
  * @inner
  * @param {CompileSourceBuffer} sourceBuffer 编译源码的中间buffer
  * @param {Object} component 组件实例
- * @param {string?} extraProp 额外的属性串
  */
-function compileComponentSource(sourceBuffer, component, extraProp) {
+function compileComponentSource(sourceBuffer, component) {
+    // 先初始化个实例，让模板编译成 ANode，并且能获得初始化数据
+    // var component = new ComponentClass();
+
+    sourceBuffer.addRaw('function (data, parentCtx, sourceSlots) {');
+    sourceBuffer.addRaw('var html = "";');
+
     sourceBuffer.addRaw(genComponentContextCode(component));
     sourceBuffer.addRaw('componentCtx.owner = parentCtx;');
-    sourceBuffer.addRaw('componentCtx.givenSlots = givenSlots;');
+    sourceBuffer.addRaw('componentCtx.sourceSlots = sourceSlots;');
 
 
+    // init data and calc computed
+    // TODO: computed dep computed, maybe has bug
     sourceBuffer.addRaw('data = extend(componentCtx.data, data);');
     sourceBuffer.addRaw('for (var $i = 0; $i < componentCtx.computedNames.length; $i++) {');
     sourceBuffer.addRaw('  var $computedName = componentCtx.computedNames[$i];');
     sourceBuffer.addRaw('  data[$computedName] = componentCtx.computed[$computedName]();');
     sourceBuffer.addRaw('}');
 
-    extraProp = extraProp || '';
-
-    var eventDeclarations = [];
-    for (var key in component.listeners) {
-        each(component.listeners[key], function (listener) {
-            if (listener.declaration) {
-                eventDeclarations.push(listener.declaration);
-            }
-        });
-    }
 
     elementSourceCompiler.tagStart(
         sourceBuffer,
         component.tagName,
         component.aNode.props,
-        extraProp,
         component.aNode.directives.bind
     );
 
-    if (!component.owner) {
-        sourceBuffer.joinString('<!--s-data:');
-        sourceBuffer.joinDataStringify();
-        sourceBuffer.joinString('-->');
-    }
 
+    sourceBuffer.addRaw('if (!parentCtx) {');
+    sourceBuffer.joinString('<!--s-data:');
+    sourceBuffer.joinDataStringify();
+    sourceBuffer.joinString('-->');
+    sourceBuffer.addRaw('}');
 
 
     elementSourceCompiler.inner(sourceBuffer, component.aNode, component);
     elementSourceCompiler.tagEnd(sourceBuffer, component.tagName);
+
+    sourceBuffer.addRaw('return html;');
+    sourceBuffer.addRaw('}');
 }
 
 var stringifier = {
@@ -668,7 +694,7 @@ var stringifier = {
         var result = '{';
 
         for (var key in source) {
-            if (typeof source[key] === 'undefined') {
+            if (!source.hasOwnProperty(key) || typeof source[key] === 'undefined') {
                 continue;
             }
 
@@ -738,6 +764,10 @@ var stringifier = {
     }
 };
 
+var COMPONENT_RESERVED_MEMBERS = splitStr2Obj('computed,filters,components,'
+    + 'initData,template,attached,created,detached,disposed,compiled'
+);
+
 /**
  * 生成组件 renderer 时 ctx 对象构建的代码
  *
@@ -748,17 +778,57 @@ var stringifier = {
 function genComponentContextCode(component) {
     var code = ['var componentCtx = {'];
 
+    // members for call expr
+    var ComponentProto = component.constructor.prototype;
+    Object.keys(ComponentProto).forEach(function (protoMemberKey) {
+        var protoMember = ComponentProto[protoMemberKey];
+        if (COMPONENT_RESERVED_MEMBERS[protoMemberKey] || !protoMember) {
+            return;
+        }
+
+        switch (typeof protoMember) {
+            case 'function':
+                code.push(protoMemberKey + ': ' + protoMember.toString() + ',');
+                break;
+
+            case 'object':
+                code.push(protoMemberKey + ':');
+
+                if (protoMember instanceof Array) {
+                    code.push('[');
+                    protoMember.forEach(function (item) {
+                        code.push(typeof item === 'function' ? item.toString() : '' + ',');
+                    });
+                    code.push(']');
+                }
+                else {
+                    code.push('{');
+                    Object.keys(protoMember).forEach(function (itemKey) {
+                        var item = protoMember[itemKey];
+                        if (typeof item === 'function') {
+                            code.push(itemKey + ':' + item.toString() + ',');
+                        }
+                    });
+                    code.push('}');
+                }
+
+                code.push(',');
+        }
+    });
+
     // given anode
-    code.push('givenSlots: [],');
+    code.push('sourceSlots: [],');
 
     // filters
     code.push('filters: {');
     var filterCode = [];
     for (var key in component.filters) {
-        var filter = component.filters[key];
+        if (component.filters.hasOwnProperty(key)) {
+            var filter = component.filters[key];
 
-        if (typeof filter === 'function') {
-            filterCode.push(key + ': ' + filter.toString());
+            if (typeof filter === 'function') {
+                filterCode.push(key + ': ' + filter.toString());
+            }
         }
     }
     code.push(filterCode.join(','));
@@ -778,19 +848,21 @@ function genComponentContextCode(component) {
     code.push('computed: {');
     var computedCode = [];
     for (var key in component.computed) {
-        var computed = component.computed[key];
+        if (component.computed.hasOwnProperty(key)) {
+            var computed = component.computed[key];
 
-        if (typeof computed === 'function') {
-            computedCode.push(key + ': '
-                + computed.toString().replace(
-                    /this.data.get\(([^\)]+)\)/g,
-                    function (match, exprLiteral) {
-                        var exprStr = (new Function('return ' + exprLiteral))();
-                        var expr = parseExpr(exprStr);
+            if (typeof computed === 'function') {
+                computedCode.push(key + ': '
+                    + computed.toString().replace(
+                        /this.data.get\(([^\)]+)\)/g,
+                        function (match, exprLiteral) {
+                            var exprStr = (new Function('return ' + exprLiteral))();
+                            var expr = parseExpr(exprStr);
 
-                        return compileExprSource.expr(expr);
-                    })
-            );
+                            return compileExprSource.expr(expr);
+                        })
+                );
+            }
         }
     }
     code.push(computedCode.join(','));
@@ -800,10 +872,12 @@ function genComponentContextCode(component) {
     code.push('computedNames: [');
     computedCode = [];
     for (var key in component.computed) {
-        var computed = component.computed[key];
+        if (component.computed.hasOwnProperty(key)) {
+            var computed = component.computed[key];
 
-        if (typeof computed === 'function') {
-            computedCode.push('"' + key + '"');
+            if (typeof computed === 'function') {
+                computedCode.push('"' + key + '"');
+            }
         }
     }
     code.push(computedCode.join(','));
@@ -822,208 +896,6 @@ function genComponentContextCode(component) {
 
 /* eslint-enable guard-for-in */
 
-/* eslint-disable no-unused-vars */
-/* eslint-disable fecs-camelcase */
-
-/**
- * 组件编译的模板函数
- *
- * @inner
- */
-function componentCompilePreCode() {
-    var $version = '##version##';
-
-    function extend(target, source) {
-        if (source) {
-            Object.keys(source).forEach(function (key) {
-                let value = source[key];
-                if (typeof value !== 'undefined') {
-                    target[key] = value;
-                }
-            });
-        }
-
-        return target;
-    }
-
-    function each(array, iterator) {
-        if (array && array.length > 0) {
-            for (var i = 0, l = array.length; i < l; i++) {
-                if (iterator(array[i], i) === false) {
-                    break;
-                }
-            }
-        }
-    }
-
-    function contains(array, value) {
-        var result;
-        each(array, function (item) {
-            result = item === value;
-            return !result;
-        });
-
-        return result;
-    }
-
-    var HTML_ENTITY = {
-        /* jshint ignore:start */
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        /* eslint-disable quotes */
-        "'": '&#39;'
-        /* eslint-enable quotes */
-        /* jshint ignore:end */
-    };
-
-    function htmlFilterReplacer(c) {
-        return HTML_ENTITY[c];
-    }
-
-    function escapeHTML(source) {
-        if (source == null) {
-            return '';
-        }
-
-        return String(source).replace(/[&<>"']/g, htmlFilterReplacer);
-    }
-
-    var DEFAULT_FILTERS = {
-        url: encodeURIComponent,
-        _class: function (source) {
-            if (source instanceof Array) {
-                return source.join(' ');
-            }
-
-            return source;
-        },
-        _style: function (source) {
-            if (typeof source === 'object') {
-                var result = '';
-                if (source) {
-                    Object.keys(source).forEach(function (key) {
-                        result += key + ':' + source[key] + ';';
-                    });
-                }
-
-                return result;
-            }
-
-            return source || '';
-        },
-        _sep: function (source, sep) {
-            return source ? sep + source : '';
-        }
-    };
-
-    function attrFilter(name, value) {
-        if (value) {
-            return ' ' + name + '="' + value + '"';
-        }
-
-        return '';
-    }
-
-    function boolAttrFilter(name, value) {
-        if (value && value !== 'false' && value !== '0') {
-            return ' ' + name;
-        }
-
-        return '';
-    }
-
-    function stringLiteralize(source) {
-        return '"'
-            + source
-                .replace(/\x5C/g, '\\\\')
-                .replace(/"/g, '\\"')
-                .replace(/\x0A/g, '\\n')
-                .replace(/\x09/g, '\\t')
-                .replace(/\x0D/g, '\\r')
-            + '"';
-    }
-
-    var stringifier = {
-        obj: function (source) {
-            var prefixComma;
-            var result = '{';
-
-            Object.keys(source).forEach(function (key) {
-                if (typeof source[key] === 'undefined') {
-                    return;
-                }
-
-                if (prefixComma) {
-                    result += ',';
-                }
-                prefixComma = 1;
-
-                result += stringLiteralize(key) + ':' + stringifier.any(source[key]);
-            });
-
-            return result + '}';
-        },
-
-        arr: function (source) {
-            var prefixComma;
-            var result = '[';
-
-            each(source, function (value) {
-                if (prefixComma) {
-                    result += ',';
-                }
-                prefixComma = 1;
-
-                result += stringifier.any(value);
-            });
-
-            return result + ']';
-        },
-
-        str: function (source) {
-            return stringLiteralize(source);
-        },
-
-        date: function (source) {
-            return 'new Date(' + source.getTime() + ')';
-        },
-
-        any: function (source) {
-            switch (typeof source) {
-                case 'string':
-                    return stringifier.str(source);
-
-                case 'number':
-                    return '' + source;
-
-                case 'boolean':
-                    return source ? 'true' : 'false';
-
-                case 'object':
-                    if (!source) {
-                        return null;
-                    }
-
-                    if (source instanceof Array) {
-                        return stringifier.arr(source);
-                    }
-
-                    if (source instanceof Date) {
-                        return stringifier.date(source);
-                    }
-
-                    return stringifier.obj(source);
-            }
-
-            throw new Error('Cannot Stringify:' + source);
-        }
-    };
-}
-/* eslint-enable no-unused-vars */
-/* eslint-enable fecs-camelcase */
-
 /**
  * 将组件编译成 render 方法的 js 源码
  *
@@ -1034,18 +906,13 @@ function compileJSSource(ComponentClass) {
     var sourceBuffer = new CompileSourceBuffer();
 
     sourceBuffer.addRendererStart();
-    sourceBuffer.addRaw(
-        componentCompilePreCode.toString()
-            .split('\n')
-            .slice(1)
-            .join('\n')
-            .replace(/\}\s*$/, '')
-    );
 
     // 先初始化个实例，让模板编译成 ANode，并且能获得初始化数据
     var component = new ComponentClass();
 
+    sourceBuffer.addRaw('var render = ');
     compileComponentSource(sourceBuffer, component);
+    sourceBuffer.addRaw(';\nreturn render(data);');
     sourceBuffer.addRendererEnd();
     return sourceBuffer.toCode();
 }

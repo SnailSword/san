@@ -2,7 +2,29 @@
 const fs = require('fs');
 const path = require('path');
 
+// 匹配 require
 const REQ_RULE = /(=|^|\s)require\(\s*(['"])([^'"]+)['"]\s*\)/;
+
+// 需要优化的 enum 变量
+const OPTI_ENUM = {
+    ExprType: require('../src/parser/expr-type'),
+    NodeType: require('../src/view/node-type'),
+    DataChangeType: require('../src/runtime/data-change-type')
+};
+
+const OPTI_ENUM_REPLACE_REG = new RegExp(
+    '(' + Object.keys(OPTI_ENUM).join('|') + ')\\.([A-Z_]+)',
+    'g'
+);
+
+function optiEnumReplaceFn(match, type, prop) {
+    if (!(prop in OPTI_ENUM[type])) {
+        throw new Error(`[ENUM OPTI ERROR] ${type} has not property ${prop}`);
+    }
+
+    return OPTI_ENUM[type][prop];
+}
+
 
 function pack(rootDir, mainFile) {
     let srcDir = path.resolve(rootDir, 'src');
@@ -10,11 +32,13 @@ function pack(rootDir, mainFile) {
     mainFile = mainFile || path.resolve(srcDir, 'main.js');
 
     let deps = depAnalyse(mainFile);
-
-    return fileContent(mainFile, 1).replace(
-        '// #[main-dependencies]',
-        deps.map(dep => fileContent(dep)).join('\n\n')
-    );
+    return {
+        content: fileContent(mainFile, 1, []).replace(
+            '// #[main-dependencies]',
+            deps.map(dep => fileContent(dep)).join('\n\n')),
+        deps: deps,
+        base: mainFile
+    };
 }
 
 function depAnalyse(targetFile) {
@@ -40,7 +64,6 @@ function depAnalyse(targetFile) {
 
             if (requireMatch) {
                 let dep = resolveDep(requireMatch[3], file);
-
                 analyse(dep);
             }
         });
@@ -66,6 +89,13 @@ function resolveDep(dep, inFile) {
     return dep;
 }
 
+/**
+ * 读取源码文件内容并执行一系列处理
+ *
+ * @param {string} file 文件路径
+ * @param {boolean} dontIgnoreExports 产出是否不忽略 exports 语句
+ * @return {string} 处理后的源码
+ */
 function fileContent(file, dontIgnoreExports) {
     return fs.readFileSync(file, 'UTF-8').split(/\r?\n/)
         .map(line => {
@@ -75,9 +105,10 @@ function fileContent(file, dontIgnoreExports) {
                 return '// ' + line;
             }
 
-            return line;
+            return line.replace(OPTI_ENUM_REPLACE_REG, optiEnumReplaceFn);
         })
         .join('\n');
 }
+
 
 exports = module.exports = pack;

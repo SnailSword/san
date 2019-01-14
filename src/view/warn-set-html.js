@@ -1,9 +1,14 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file  获取节点 stump 的 comment
- * @author errorrik(errorrik@gmail.com)
  */
 
 var noSetHTML = require('../browser/no-set-html');
+var warn = require('../util/warn');
 
 // #[begin] error
 /**
@@ -20,16 +25,7 @@ function warnSetHTML(el) {
     // some html elements cannot set innerHTML in old ie
     // see: https://msdn.microsoft.com/en-us/library/ms533897(VS.85).aspx
     if (noSetHTML(el)) {
-        var message = '[SAN WARNING] set html for element "' + el.tagName
-            + '" may cause an error in old IE';
-        /* eslint-disable no-console */
-        if (typeof console === 'object' && console.warn) {
-            console.warn(message);
-        }
-        else {
-            throw new Error(message);
-        }
-        /* eslint-enable no-console */
+        warn('set html for element "' + el.tagName + '" may cause an error in old IE');
     }
 }
 // #[end]

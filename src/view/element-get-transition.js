@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 获取 element 的 transition 控制对象
- * @author errorrik(errorrik@gmail.com)
  */
 
 var evalArgs = require('../runtime/eval-args');
@@ -18,7 +22,7 @@ function elementGetTransition(element) {
     var owner = element.owner;
 
     if (element.nodeType === NodeType.CMPT) {
-        var cmptGivenTransition = element.givenANode && element.givenANode.directives.transition;
+        var cmptGivenTransition = element.source && element.source.directives.transition;
         if (cmptGivenTransition) {
             directive = cmptGivenTransition;
         }

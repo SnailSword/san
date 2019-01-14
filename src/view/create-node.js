@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 创建节点的工厂方法
- * @author errorrik(errorrik@gmail.com)
  */
 
 var NodeType = require('./node-type');
@@ -10,6 +14,7 @@ var SlotNode = require('./slot-node');
 var ForNode = require('./for-node');
 var IfNode = require('./if-node');
 var TemplateNode = require('./template-node');
+var AsyncComponent = require('./async-component');
 
 
 /**
@@ -46,18 +51,26 @@ function createNode(aNode, parent, scope) {
             return new TemplateNode(aNode, owner, scope, parent);
 
         default:
-            var ComponentType = owner.getComponentType
+            var ComponentOrLoader = owner.getComponentType
                 ? owner.getComponentType(aNode)
                 : owner.components[aNode.tagName];
 
-            if (ComponentType) {
-                return new ComponentType({
-                    aNode: aNode,
-                    owner: owner,
-                    scope: scope,
-                    parent: parent,
-                    subTag: aNode.tagName
-                });
+            if (ComponentOrLoader) {
+                return typeof ComponentOrLoader === 'function'
+                    ? new ComponentOrLoader({
+                        source: aNode,
+                        owner: owner,
+                        scope: scope,
+                        parent: parent,
+                        subTag: aNode.tagName
+                    })
+                    : new AsyncComponent({
+                        source: aNode,
+                        owner: owner,
+                        scope: scope,
+                        parent: parent,
+                        subTag: aNode.tagName
+                    }, ComponentOrLoader);
             }
     }
 

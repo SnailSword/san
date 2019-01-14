@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 解析抽象节点属性
- * @author errorrik(errorrik@gmail.com)
  */
 
 var each = require('../util/each');
@@ -56,7 +60,7 @@ function integrateAttr(aNode, name, value, options) {
 
             event.expr = parseCall(value, [
                 createAccessor([
-                    { type: ExprType.STRING, value: '$event' }
+                    {type: ExprType.STRING, value: '$event'}
                 ])
             ]);
             break;

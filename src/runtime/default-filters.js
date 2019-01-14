@@ -1,11 +1,14 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 默认filter
- * @author errorrik(errorrik@gmail.com)
  */
 
 
 /* eslint-disable fecs-camelcase */
-/* eslint-disable guard-for-in */
 
 /**
  * 默认filter
@@ -35,7 +38,9 @@ var DEFAULT_FILTERS = {
         if (typeof source === 'object') {
             var result = '';
             for (var key in source) {
-                result += key + ':' + source[key] + ';';
+                if (source.hasOwnProperty(key)) {
+                    result += key + ':' + source[key] + ';';
+                }
             }
 
             return result;

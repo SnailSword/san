@@ -1,8 +1,13 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file ie版本号
- * @author errorrik(errorrik@gmail.com)
  */
 
+ // #[begin] allua
 /**
  * 从userAgent中ie版本号的匹配信息
  *
@@ -17,5 +22,6 @@ var ieVersionMatch = typeof navigator !== 'undefined'
  * @type {number}
  */
 var ie = ieVersionMatch ? ieVersionMatch[1] - 0 : 0;
+// #[end]
 
 exports = module.exports = ie;

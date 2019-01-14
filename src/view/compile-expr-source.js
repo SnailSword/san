@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 编译源码的 helper 方法集合
- * @author errorrik(errorrik@gmail.com)
  */
 
 var each = require('../util/each');
@@ -58,6 +62,42 @@ var compileExprSource = {
                 }
             });
         }
+
+        return code;
+    },
+
+    /**
+     * 生成调用表达式代码
+     *
+     * @param {Object?} callExpr 调用表达式对象
+     * @return {string}
+     */
+    callExpr: function (callExpr) {
+        var paths = callExpr.name.paths;
+        var code = 'componentCtx.' + paths[0].value;
+
+        for (var i = 1; i < paths.length; i++) {
+            var path = paths[i];
+
+            switch (path.type) {
+                case ExprType.STRING:
+                    code += '.' + path.value;
+                    break;
+
+                case ExprType.NUMBER:
+                    code += '[' + path.value + ']';
+                    break;
+
+                default:
+                    code += '[' + compileExprSource.expr(path) + ']';
+            }
+        }
+
+        code += '(';
+        each(callExpr.args, function (arg, index) {
+            code += (index > 0 ? ', ' : '') + compileExprSource.expr(arg);
+        });
+        code += ')';
 
         return code;
     },
@@ -176,6 +216,20 @@ var compileExprSource = {
      * @return {string}
      */
     expr: function (expr) {
+        if (expr.parenthesized) {
+            return '(' + compileExprSource._expr(expr) + ')';
+        }
+
+        return compileExprSource._expr(expr);
+    },
+
+    /**
+     * 根据表达式类型进行生成代码函数的中转分发
+     *
+     * @param {Object} expr 表达式对象
+     * @return {string}
+     */
+    _expr: function (expr) {
         switch (expr.type) {
             case ExprType.UNARY:
                 switch (expr.operator) {
@@ -218,6 +272,9 @@ var compileExprSource = {
 
             case ExprType.OBJECT:
                 return compileExprSource.object(expr);
+
+            case ExprType.CALL:
+                return compileExprSource.callExpr(expr);
         }
     }
 };

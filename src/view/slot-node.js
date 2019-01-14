@@ -1,10 +1,15 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file slot 节点类
- * @author errorrik(errorrik@gmail.com)
  */
 
 var each = require('../util/each');
 var guid = require('../util/guid');
+var extend = require('../util/extend');
 var createANode = require('../parser/create-a-node');
 var ExprType = require('../parser/expr-type');
 var createAccessor = require('../parser/create-accessor');
@@ -13,6 +18,7 @@ var Data = require('../runtime/data');
 var DataChangeType = require('../runtime/data-change-type');
 var changeExprCompare = require('../runtime/change-expr-compare');
 var insertBefore = require('../browser/insert-before');
+var removeEl = require('../browser/remove-el');
 var NodeType = require('./node-type');
 var LifeCycle = require('./life-cycle');
 var getANodeProp = require('./get-a-node-prop');
@@ -58,19 +64,17 @@ function SlotNode(aNode, owner, scope, parent, reverseWalker) {
     }
 
     // calc aNode children
-    var givenSlots = owner.givenSlots;
-    var givenChildren;
-    if (givenSlots) {
-        givenChildren = this.isNamed ? givenSlots.named[this.name] : givenSlots.noname;
+    var sourceSlots = owner.sourceSlots;
+    var matchedSlots;
+    if (sourceSlots) {
+        matchedSlots = this.isNamed ? sourceSlots.named[this.name] : sourceSlots.noname;
     }
 
-    if (givenChildren) {
+    if (matchedSlots) {
         this.isInserted = true;
     }
 
-    realANode.children = givenChildren || aNode.children.slice(0);
-
-    var me = this;
+    realANode.children = matchedSlots || aNode.children.slice(0);
 
     // calc scoped slot vars
     realANode.vars = aNode.vars;
@@ -78,7 +82,7 @@ function SlotNode(aNode, owner, scope, parent, reverseWalker) {
 
     var initData;
     if (nodeSBindInit(this, aNode.directives.bind)) {
-        initData = extend({}, me._sbindData);
+        initData = extend({}, this._sbindData);
     }
 
     if (realANode.vars) {
@@ -108,6 +112,7 @@ function SlotNode(aNode, owner, scope, parent, reverseWalker) {
         this.sel = document.createComment(this.id);
         insertBefore(this.sel, reverseWalker.target, reverseWalker.current);
 
+        var me = this;
         each(this.aNode.children, function (aNodeChild) {
             me.children.push(createReverseNode(aNodeChild, reverseWalker, me));
         });
@@ -132,7 +137,12 @@ SlotNode.prototype.dispose = function (noDetach, noTransition) {
     this.childOwner = null;
     this.childScope = null;
 
-    elementDisposeChildren(this, noDetach, noTransition);
+    elementDisposeChildren(this.children, noDetach, noTransition);
+
+    if (!noDetach) {
+        removeEl(this.el);
+        removeEl(this.sel);
+    }
     nodeDispose(this);
 };
 
@@ -149,14 +159,14 @@ SlotNode.prototype._toPhase = elementOwnToPhase;
 SlotNode.prototype._update = function (changes, isFromOuter) {
     var me = this;
 
-    if (this.nameBind && evalExpr(this.nameBind.expr, this.scope, this.owner) !== me.name) {
+    if (this.nameBind && evalExpr(this.nameBind.expr, this.scope, this.owner) !== this.name) {
         this.owner._notifyNeedReload();
         return false;
     }
 
     if (isFromOuter) {
         if (this.isInserted) {
-            elementUpdateChildren(this, changes);
+            elementUpdateChildren(this.children, changes);
         }
     }
     else {
@@ -182,7 +192,7 @@ SlotNode.prototype._update = function (changes, isFromOuter) {
                     scopedChanges.push({
                         type: DataChangeType.SET,
                         expr: createAccessor([
-                            { type: ExprType.STRING, value: name }
+                            {type: ExprType.STRING, value: name}
                         ]),
                         value: value,
                         option: {}
@@ -229,10 +239,10 @@ SlotNode.prototype._update = function (changes, isFromOuter) {
                 });
             });
 
-            elementUpdateChildren(this, scopedChanges);
+            elementUpdateChildren(this.children, scopedChanges);
         }
         else if (!this.isInserted) {
-            elementUpdateChildren(this, changes);
+            elementUpdateChildren(this.children, changes);
         }
     }
 };

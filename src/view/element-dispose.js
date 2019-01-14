@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 销毁元素节点
- * @author errorrik(errorrik@gmail.com)
  */
 
 
@@ -16,7 +20,8 @@ var nodeDispose = require('./node-dispose');
  * @param {Object=} options 销毁行为的参数
  */
 function elementDispose(element) {
-    elementDisposeChildren(element, 1, 1);
+    elementDisposeChildren(element.children, 1, 1);
+    elementDisposeChildren(element.implicitChildren, 0, 1);
 
     // el 事件解绑
     var len = element._elFns.length;

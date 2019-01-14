@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 表达式计算
- * @author errorrik(errorrik@gmail.com)
  */
 
 var ExprType = require('../parser/expr-type');
@@ -161,6 +165,22 @@ function evalExpr(expr, data, owner) {
 
                 if (value == null) {
                     value = '';
+                }
+
+                break;
+
+            case ExprType.CALL:
+                if (owner && expr.name.type === ExprType.ACCESSOR) {
+                    var method = owner;
+                    var pathsLen = expr.name.paths.length;
+
+                    for (var i = 0; method && i < pathsLen; i++) {
+                        method = method[evalExpr(expr.name.paths[i], data, owner)];
+                    }
+
+                    if (method) {
+                        value = method.apply(owner, evalArgs(expr.args, data, owner));
+                    }
                 }
 
                 break;

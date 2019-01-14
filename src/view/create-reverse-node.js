@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 通过组件反解创建节点的工厂方法
- * @author errorrik(errorrik@gmail.com)
  */
 
 var NodeType = require('./node-type');
@@ -46,19 +50,28 @@ function createReverseNode(aNode, reverseWalker, parent, scope) {
             return new TemplateNode(aNode, owner, scope, parent, reverseWalker);
 
         default:
-            var ComponentType = owner.getComponentType
+            var ComponentOrLoader = owner.getComponentType
                 ? owner.getComponentType(aNode)
                 : owner.components[aNode.tagName];
 
-            if (ComponentType) {
-                return new ComponentType({
-                    aNode: aNode,
-                    owner: owner,
-                    scope: scope,
-                    parent: parent,
-                    subTag: aNode.tagName,
-                    reverseWalker: reverseWalker
-                });
+            if (ComponentOrLoader) {
+                return typeof ComponentOrLoader === 'function'
+                    ? new ComponentOrLoader({
+                        source: aNode,
+                        owner: owner,
+                        scope: scope,
+                        parent: parent,
+                        subTag: aNode.tagName,
+                        reverseWalker: reverseWalker
+                    })
+                    : new AsyncComponent({
+                        source: aNode,
+                        owner: owner,
+                        scope: scope,
+                        parent: parent,
+                        subTag: aNode.tagName,
+                        reverseWalker: reverseWalker
+                    }, ComponentOrLoader);
             }
     }
 

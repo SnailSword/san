@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file text 节点类
- * @author errorrik(errorrik@gmail.com)
  */
 
 var isBrowser = require('../browser/is-browser');
@@ -106,9 +110,15 @@ TextNode.prototype.attach = function (parentEl, beforeEl) {
 
 /**
  * 销毁 text 节点
+ *
+ * @param {boolean=} noDetach 是否不要把节点从dom移除
  */
-TextNode.prototype.dispose = function () {
-    this._prev = null;
+TextNode.prototype.dispose = function (noDetach) {
+    if (!noDetach) {
+        removeEl(this.el);
+        removeEl(this.sel);
+    }
+
     this.el = null;
     this.sel = null;
 };

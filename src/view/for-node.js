@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file for 指令节点类
- * @author errorrik(errorrik@gmail.com)
  */
 
 var inherits = require('../util/inherits');
@@ -16,15 +20,12 @@ var DataChangeType = require('../runtime/data-change-type');
 var changeExprCompare = require('../runtime/change-expr-compare');
 var evalExpr = require('../runtime/eval-expr');
 var changesIsInDataRef = require('../runtime/changes-is-in-data-ref');
-var removeEl = require('../browser/remove-el');
 var insertBefore = require('../browser/insert-before');
-var LifeCycle = require('./life-cycle');
 var NodeType = require('./node-type');
 var createNode = require('./create-node');
 var createReverseNode = require('./create-reverse-node');
 var nodeOwnSimpleDispose = require('./node-own-simple-dispose');
 var nodeOwnCreateStump = require('./node-own-create-stump');
-var elementDisposeChildren = require('./element-dispose-children');
 var dataCache = require('../runtime/data-cache');
 
 
@@ -229,25 +230,13 @@ ForNode.prototype.attach = function (parentEl, beforeEl) {
  */
 ForNode.prototype._createChildren = function () {
     var me = this;
-    var parentEl = me.el.parentNode;
+    var parentEl = this.el.parentNode;
 
     eachForData(this, function (value, i) {
         var child = createForDirectiveChild(me, value, i);
         me.children.push(child);
         child.attach(parentEl, me.el);
     });
-};
-
-/**
- * 将元素从页面上移除的行为
- */
-ForNode.prototype.detach = function () {
-    if (this.lifeCycle.attached) {
-        elementDisposeChildren(this);
-        this.children = [];
-        removeEl(this.el);
-        this.lifeCycle = LifeCycle.detached;
-    }
 };
 
 /* eslint-disable fecs-max-statements */
@@ -377,7 +366,6 @@ ForNode.prototype._updateArray = function (changes, newList) {
     // 控制列表是否整体更新的变量
     var isChildrenRebuild;
 
-    // var newList = evalExpr(this.param.value, this.scope, this.owner) || [];
     var newLen = newList.length;
 
     /* eslint-disable no-redeclare */
@@ -417,21 +405,26 @@ ForNode.prototype._updateArray = function (changes, newList) {
 
                 childrenChanges[changeIndex].push(change);
 
-                if (this.children[changeIndex]) {
-                    if (change.type === DataChangeType.SPLICE) {
-                        this.children[changeIndex].scope._splice(
-                            change.expr,
-                            [].concat(change.index, change.deleteCount, change.insertions),
-                            { silent: 1 }
-                        );
-                    }
-                    else {
+                if (change.type === DataChangeType.SET) {
+                    if (this.children[changeIndex]) {
                         this.children[changeIndex].scope._set(
                             change.expr,
                             change.value,
                             { silent: 1 }
                         );
                     }
+                    else {
+                        // 设置数组项的索引可能超出数组长度，此时需要新增
+                        // 比如当前数组只有2项，但是set list[4]
+                        this.children[changeIndex] = 0;
+                    }
+                }
+                else if (this.children[changeIndex]) {
+                    this.children[changeIndex].scope._splice(
+                        change.expr,
+                        [].concat(change.index, change.deleteCount, change.insertions),
+                        { silent: 1 }
+                    );
                 }
             }
         }
@@ -494,12 +487,16 @@ ForNode.prototype._updateArray = function (changes, newList) {
                             (childrenChanges[oldIndex] = childrenChanges[oldIndex] || []).push(change);
                         }
                     }
-                    else if (newIndex && (!oldIndex || lcsFlags[oldIndex][newIndex - 1] >= lcsFlags[oldIndex - 1][newIndex])) {
+                    else if (newIndex
+                        && (!oldIndex || lcsFlags[oldIndex][newIndex - 1] >= lcsFlags[oldIndex - 1][newIndex])
+                    ) {
                         newIndex--;
                         childrenChanges.splice(oldIndex, 0, 0);
                         this.children.splice(oldIndex, 0, 0);
                     }
-                    else if (oldIndex && (!newIndex || lcsFlags[oldIndex][newIndex - 1] < lcsFlags[oldIndex - 1][newIndex])) {
+                    else if (oldIndex
+                        && (!newIndex || lcsFlags[oldIndex][newIndex - 1] < lcsFlags[oldIndex - 1][newIndex])
+                    ) {
                         oldIndex--;
                         disposeChildren.push(this.children[oldIndex]);
                         childrenChanges.splice(oldIndex, 1);

@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 读取一元表达式
- * @author errorrik(errorrik@gmail.com)
  */
 
 var ExprType = require('./expr-type');
@@ -8,6 +12,7 @@ var readString = require('./read-string');
 var readNumber = require('./read-number');
 var readCall = require('./read-call');
 var readParenthesizedExpr = require('./read-parenthesized-expr');
+var readTertiaryExpr = require('./read-tertiary-expr');
 
 
 /**
@@ -32,8 +37,8 @@ function readUnaryExpr(walker) {
         case 39: // '
             return readString(walker);
 
+        case 45: // -
         // number
-        case 45:
         case 48:
         case 49:
         case 50:
@@ -92,12 +97,15 @@ function readUnaryExpr(walker) {
 
                     // #[begin] error
                     if (item.name.type > 4) {
-                        throw new Error('[SAN FATAL] unexpect object name: ' + walker.cut(walkerIndexBeforeName, walker.index));
+                        throw new Error(
+                            '[SAN FATAL] unexpect object name: '
+                            + walker.cut(walkerIndexBeforeName, walker.index)
+                        );
                     }
                     // #[end]
 
                     if (walker.goUntil(58)) { // :
-                        item.expr = readTertiaryExpr(walker)
+                        item.expr = readTertiaryExpr(walker);
                     }
                     else {
                         item.expr = item.name;

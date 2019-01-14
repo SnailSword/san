@@ -1,14 +1,18 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 创建节点对应的 HTMLElement 主元素
- * @author errorrik(errorrik@gmail.com)
  */
 
 
 var evalExpr = require('../runtime/eval-expr');
 var createEl = require('../browser/create-el');
 var handleProp = require('./handle-prop');
-var LifeCycle = require('./life-cycle');
 var NodeType = require('./node-type');
+var getPropHandler = require('./get-prop-handler');
 
 var emptyPropWhenCreate = {
     'class': 1,
@@ -34,7 +38,14 @@ function elementOwnCreate() {
         }
 
         for (var key in this._sbindData) {
-            getPropHandler(this.tagName, key).prop(this.el, this._sbindData[key], key, this);
+            if (this._sbindData.hasOwnProperty(key)) {
+                getPropHandler(this.tagName, key).prop(
+                    this.el,
+                    this._sbindData[key],
+                    key,
+                    this
+                );
+            }
         }
 
         for (var i = 0, l = props.length; i < l; i++) {

@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 读取调用
- * @author errorrik(errorrik@gmail.com)
  */
 
 var ExprType = require('./expr-type');
@@ -11,7 +15,7 @@ var readTertiaryExpr = require('./read-tertiary-expr');
  * 读取调用
  *
  * @param {Walker} walker 源码读取对象
- * @param {Array=} defaultArgs
+ * @param {Array=} defaultArgs 默认参数
  * @return {Object}
  */
 function readCall(walker, defaultArgs) {

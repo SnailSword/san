@@ -1,11 +1,16 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file template 节点类
- * @author errorrik(errorrik@gmail.com)
  */
 
 var each = require('../util/each');
 var guid = require('../util/guid');
 var insertBefore = require('../browser/insert-before');
+var removeEl = require('../browser/remove-el');
 var NodeType = require('./node-type');
 var LifeCycle = require('./life-cycle');
 var nodeDispose = require('./node-dispose');
@@ -68,7 +73,12 @@ TemplateNode.prototype.attach = nodeOwnOnlyChildrenAttach;
  * @param {boolean=} noTransition 是否不显示过渡动画效果
  */
 TemplateNode.prototype.dispose = function (noDetach, noTransition) {
-    elementDisposeChildren(this, noDetach, noTransition);
+    elementDisposeChildren(this.children, noDetach, noTransition);
+
+    if (!noDetach) {
+        removeEl(this.el);
+        removeEl(this.sel);
+    }
     nodeDispose(this);
 };
 
@@ -81,7 +91,7 @@ TemplateNode.prototype._toPhase = elementOwnToPhase;
  * @param {Array} changes 数据变化信息
  */
 TemplateNode.prototype._update = function (changes) {
-    elementUpdateChildren(this, changes);
+    elementUpdateChildren(this.children, changes);
 };
 
 exports = module.exports = TemplateNode;

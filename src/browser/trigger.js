@@ -1,10 +1,14 @@
 /**
- * @file DOM 事件挂载
- * @author dafrok(o.o@mug.dog)
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
+ * @file 触发元素事件
  */
 
 /**
- * DOM 事件挂载
+ * 触发元素事件
  *
  * @inner
  * @param {HTMLElement} el DOM元素

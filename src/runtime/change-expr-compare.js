@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 比较变更表达式与目标表达式之间的关系
- * @author errorrik(errorrik@gmail.com)
  */
 
 var ExprType = require('../parser/expr-type');
@@ -59,8 +63,7 @@ function changeExprCompare(changeExpr, expr, data) {
 
                 if (result && i < changeLen
                     /* eslint-disable eqeqeq */
-                    && (pathExprValue || evalExpr(pathExpr, data))
-                        != (changePaths[i].value || evalExpr(changePaths[i], data))
+                    && (pathExprValue || evalExpr(pathExpr, data)) != changePaths[i].value
                     /* eslint-enable eqeqeq */
                 ) {
                     result = 0;
@@ -103,6 +106,13 @@ function changeExprCompare(changeExpr, expr, data) {
             }
 
             return 1;
+
+        case ExprType.CALL:
+            if (changeExprCompareExprs(changeExpr, expr.name.paths, data)
+                || changeExprCompareExprs(changeExpr, expr.args, data)
+            ) {
+                return 1;
+            }
     }
 
     return 0;

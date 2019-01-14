@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 获取属性处理对象
- * @author errorrik(errorrik@gmail.com)
  */
 
 var contains = require('../util/contains');
@@ -39,8 +43,7 @@ var HTML_ATTR_PROP_MAP = {
 var defaultElementPropHandler = {
     prop: function (el, value, name, element) {
         var propName = HTML_ATTR_PROP_MAP[name] || name;
-        value = value == null ? '' : value
-
+        value = value == null ? '' : value;
         // input 的 type 是个特殊属性，其实也应该用 setAttribute
         // 但是 type 不应该运行时动态改变，否则会有兼容性问题
         // 所以这里直接就不管了
@@ -106,10 +109,6 @@ var defaultElementPropHandlers = {
         prop: empty
     },
 
-    readonly: boolPropHandler,
-    disabled: boolPropHandler,
-    autofocus: boolPropHandler,
-    required: boolPropHandler,
     draggable: boolPropHandler
 };
 /* eslint-enable fecs-properties-quote */
@@ -121,7 +120,7 @@ var analInputChecker = {
     }
 };
 
-function analInputCheckedState(element, value, oper) {
+function analInputCheckedState(element, value) {
     var bindValue = getANodeProp(element.aNode, 'value');
     var bindType = getANodeProp(element.aNode, 'type');
 
@@ -130,7 +129,7 @@ function analInputCheckedState(element, value, oper) {
 
         if (analInputChecker[type]) {
             var bindChecked = getANodeProp(element.aNode, 'checked');
-            if (!bindChecked.hintExpr) {
+            if (bindChecked != null && !bindChecked.hintExpr) {
                 bindChecked.hintExpr = bindValue.expr;
             }
 
@@ -155,6 +154,19 @@ var elementPropHandlers = {
                     'checked',
                     element
                 );
+
+                // #[begin] allua
+                // 代码不用抽出来防重复，allua内的代码在现代浏览器版本会被编译时干掉，gzip也会处理重复问题
+                // see: #378
+                if (ie && ie < 8 && !element.lifeCycle.attached) {
+                    boolPropHandler.prop(
+                        el,
+                        state != null ? state : value,
+                        'defaultChecked',
+                        element
+                    );
+                }
+                // #[end]
             },
 
             output: function (element, bindInfo, data) {
@@ -181,7 +193,11 @@ var elementPropHandlers = {
 
                 defaultElementPropHandler.output(element, bindInfo, data);
             }
-        }
+        },
+        readonly: boolPropHandler,
+        disabled: boolPropHandler,
+        autofocus: boolPropHandler,
+        required: boolPropHandler
     },
 
     option: {
@@ -203,6 +219,27 @@ var elementPropHandlers = {
             },
 
             output: defaultElementPropHandler.output
+        },
+        readonly: boolPropHandler,
+        disabled: boolPropHandler,
+        autofocus: boolPropHandler,
+        required: boolPropHandler
+    },
+
+    textarea: {
+        readonly: boolPropHandler,
+        disabled: boolPropHandler,
+        autofocus: boolPropHandler,
+        required: boolPropHandler
+    },
+
+    button: {
+        disabled: boolPropHandler,
+        autofocus: boolPropHandler,
+        type: {
+            prop: function (el, value) {
+                el.setAttribute('type', value || '');
+            }
         }
     }
 };

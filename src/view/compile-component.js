@@ -1,6 +1,10 @@
 /**
+ * Copyright (c) Baidu Inc. All rights reserved.
+ *
+ * This source code is licensed under the MIT license.
+ * See LICENSE file in the project root for license information.
+ *
  * @file 编译组件类
- * @author errorrik(errorrik@gmail.com)
  */
 
 
@@ -26,7 +30,7 @@ function compileComponent(ComponentClass) {
         for (var key in components) { // eslint-disable-line
             var componentClass = components[key];
 
-            if (typeof componentClass === 'object') {
+            if (typeof componentClass === 'object' && !(componentClass instanceof ComponentLoader)) {
                 components[key] = defineComponent(componentClass);
             }
             else if (componentClass === 'self') {
